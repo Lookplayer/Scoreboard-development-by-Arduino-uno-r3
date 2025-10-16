@@ -1,0 +1,172 @@
+#include <Adafruit_NeoPixel.h>
+
+#define PIN 3 // Pin ที่เชื่อมต่อกับ NeoPixel
+#define NUMPIXELS 60 // จำนวน NeoPixel
+
+#define ADD_TEAM1 2 // ปุ่มเพิ่มคะแนนทีม 1
+#define SUB_TEAM1 12 // ปุ่มลดคะแนนทีม 1
+
+#define ADD_TEAM2 4 // ปุ่มเพิ่มคะแนนทีม 2
+#define SUB_TEAM2 5 // ปุ่มลดคะแนนทีม 2
+
+#define RESET_SCORETEAM1 6 // รีเซ็ตคะแนนทีม1
+#define RESET_SCORETEAM2 7 // รีเซ็ตคะแนนทีม2
+
+int delay_button = 300;
+
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_RGB + NEO_KHZ800);
+
+int score[2] = {0, 0}; // คะแนนของทั้งสองทีม
+uint32_t colorList[] = { pixels.Color(0,0,255), pixels.Color(255,0,0) }; // สี: น้ำเงิน, ขาว
+
+// Layout ของตัวเลข (7-segment สำหรับ NeoPixel LED)
+int charLayout[10][15] = {
+  {1,1,1,1,0,1,1,0,1,1,0,1,1,1,1}, // 0
+  {1,1,0,0,1,0,0,1,0,0,1,0,1,1,1}, // 1
+  {1,1,1,1,0,0,1,1,1,0,0,1,1,1,1}, // 2
+  {1,1,1,1,0,0,1,1,1,1,0,0,1,1,1}, // 3
+  {1,0,1,1,0,1,1,1,1,1,0,0,0,0,1}, // 4
+  {1,1,1,0,0,1,1,1,1,1,0,0,1,1,1}, // 5
+  {1,1,1,0,0,1,1,1,1,1,0,1,1,1,1}, // 6
+  {1,1,1,1,0,0,0,0,1,1,0,0,0,0,1}, // 7
+  {1,1,1,1,0,1,1,1,1,1,0,1,1,1,1}, // 8
+  {1,1,1,1,0,1,1,1,1,1,0,0,0,0,1}  // 9
+};
+
+void setNumber(int side, int displayNum) {
+  int sideOffset = side * 15 * 2;
+  int ones = (displayNum % 10);
+  int tens = ((displayNum / 10) % 10);
+
+  for (int k = 0; k < 15; k++) {
+    toggleLocation(side, k + sideOffset, charLayout[tens][k]);     
+    toggleLocation(side, k + 15 + sideOffset, charLayout[ones][k]);
+  }
+  pixels.show();
+}
+
+void setup() {
+  Serial.begin(9600); // เริ่มต้น Serial Monitor
+  pixels.begin(); // เริ่มการทำงานของ NeoPixel
+  pixels.show(); // ปิดไฟทั้งหมดก่อนเริ่มต้น
+
+  // เปิดทุกหลอด
+  //turnOnAllLEDs();
+  setNumber(0, 0);
+  setNumber(1, 0);
+
+  // ตั้งค่าปุ่มกดให้ใช้ Pull-up Resistor
+  pinMode(ADD_TEAM1, INPUT_PULLUP); // ปุ่มเพิ่มคะแนนทีม 1
+  pinMode(SUB_TEAM1, INPUT_PULLUP); // ปุ่มลดคะแนนทีม 1
+
+  pinMode(ADD_TEAM2, INPUT_PULLUP); // ปุ่มเพิ่มคะแนนทีม 2
+  pinMode(SUB_TEAM2, INPUT_PULLUP); // ปุ่มลดคะแนนทีม 2
+
+  // INPUT_PULLUP); // ปุ่มรีเซ็ตคะแนน
+  pinMode(RESET_SCORETEAM1, INPUT_PULLUP); // ปุ่มรีเซ็ตคะแนนทีม 1
+  pinMode(RESET_SCORETEAM2, INPUT_PULLUP); // ปุ่มรีเซ็ตคะแนนทีม 2
+
+  Serial.println("Bluetooth Active, Waiting for Input...");
+}
+
+void loop() {
+  // ตรวจสอบปุ่มกดและเพิ่ม/ลดคะแนนหรือรีเซ็ต
+  if (digitalRead(ADD_TEAM1) == LOW) { // ปุ่มเพิ่มคะแนนทีม 1
+    setScore(0, 1);
+    Serial.println("Team 1 Score +1");
+    delay(delay_button);
+  }
+  if (digitalRead(SUB_TEAM1) == LOW) { // ปุ่มลดคะแนนทีม 1
+    setScore(0, -1);
+    Serial.println("Team 1 Score -1");
+    delay(delay_button);
+  }
+  if (digitalRead(ADD_TEAM2) == LOW) { // ปุ่มเพิ่มคะแนนทีม 2
+    setScore(1, 1);
+    Serial.println("Team 2 Score +1");
+    delay(delay_button);
+  }
+  if (digitalRead(SUB_TEAM2) == LOW) { // ปุ่มลดคะแนนทีม 2
+    setScore(1, -1);
+    Serial.println("Team 2 Score -1");
+    delay(delay_button);
+  }
+  if (digitalRead(RESET_SCORETEAM1) == LOW) { // ปุ่มรีเซ็ตคะแนนทีม 1
+    setScore(0, 0);
+    Serial.println("Team 1 Score Reset!");
+    delay(delay_button);
+  }
+  if (digitalRead(RESET_SCORETEAM2) == LOW) { // ปุ่มรีเซ็ตคะแนนทีม 2
+    setScore(1, 0);
+    Serial.println("Team 2 Score Reset!");
+    delay(delay_button);
+  }
+
+  // ตรวจสอบว่ามีข้อมูลจาก Bluetooth เข้ามาหรือไม่
+  if (Serial.available()) {
+    char command = Serial.read(); // อ่านคำสั่งจาก Bluetooth
+    handleCommand(command); // จัดการคำสั่ง
+  }
+
+  pixels.show();
+}
+
+// ฟังก์ชันจัดการคำสั่งจาก Bluetooth
+void handleCommand(char command) {
+  switch (command) {
+    case 'A': // เพิ่มคะแนนทีม 1
+      setScore(0, 1);
+      break;
+    case 'B': // ลดคะแนนทีม 1
+      setScore(0, -1);
+      break;
+    case 'C': // เพิ่มคะแนนทีม 2
+      setScore(1, 1);
+      break;
+    case 'D': // ลดคะแนนทีม 2
+      setScore(1, -1);
+      break;
+    case 'R': // รีเซ็ตคะแนนทั้งสองทีม
+      setScore(0, 0);
+      setScore(1, 0);
+      break;
+    default:
+      Serial.println("Invalid Command");
+      break;
+  }
+}
+
+// ฟังก์ชันเปิด/ปิด LED ตามตำแหน่ง
+void toggleLocation(int side, int loc, int ledState) {
+  if (ledState == 0) {
+    pixels.setPixelColor(loc, pixels.Color(0, 0, 0)); // ปิด
+  } else {
+    pixels.setPixelColor(loc, colorList[side]); // สีทีม
+  }
+}
+
+// ฟังก์ชันตั้งค่าคะแนน
+void setScore(int team, int val) {
+  // ตรวจสอบว่า team เป็น 0 หรือ 1 เท่านั้น
+  if (team < 0 || team > 1) {
+    Serial.println("Invalid team index!");
+    return;
+  }
+
+  // ตรวจสอบค่าของ val และปรับคะแนน
+  if (val == 0) {
+    score[team] = 0;  // รีเซ็ตคะแนนของทีมที่เลือก
+  } else {
+    score[team] += val;  // เพิ่มหรือลดคะแนนตามค่าของ val
+    if (score[team] < 0) score[team] = 0;  // ไม่ให้คะแนนติดลบ
+  }
+
+  // อัปเดตการแสดงผล
+  setNumber(team, score[team]);
+
+  // แสดงผลคะแนนผ่าน Serial Monitor
+  Serial.print("Team 1: ");
+  Serial.print(score[0]);
+  Serial.print(" - Team 2: ");
+  Serial.println(score[1]);
+}
